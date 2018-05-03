@@ -1,0 +1,41 @@
+Project Title
+==============
+Customizable Scrolling Text On Matrix LED
+
+Short Description:
+-There main interactive component is a 8x8 Matrix LED.
+
+-A user woud be able to paint a picture on the LED and save it. A series of picture can be painted and saved into memory.
+
+-The series of pictures will scroll across the LED matric (when it's set to "playing" mode)
+
+-During painting mode, user selects which LED to paint by using a controller that moves a cursor. The controller is possibly made of 2 potentiometers where one controls the row and the other controls the column.
+
+-The system will have a number of buttons that lets user:
+	-select a pixel and commit it (so it becomes part of the picture being painted)
+	-save the picture into buffer
+	-toggle the matrix LED between "play mode" and "paint mode"
+	-reset the system state and buffer
+
+-There will be a numeric display showing 
+	-In paint mode: the number of pictures saved to buffer
+	-In play mode: the picture number that's being scrolled.
+
+
+Team Members
+=============
+Jimmy Fung
+
+
+
+Learning Objective
+===================
+-Build a complete system made of a number of functionally unique digital peripherals that, collectively, provide practical use case value.
+-Learn how each peripheral is integrated into a microcontroller system.
+
+
+Background Knoweldge
+=====================
+No previous experiences programming a microcontroller.
+Basic understanding of circuitry and wiring on breadboard and familiarity reading datasheet. So I will be able to wire together the neccessary hardware.
+Familiar coding in C/C++, so writing the software logic and deploying it to the hardware should be achievable.

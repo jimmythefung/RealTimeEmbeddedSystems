@@ -1,0 +1,18 @@
+What is the utilization of this set of periodic tasks?
+  1/10 
++ 1/25 
++ 2/17 
++ 2/22 
++ 2/27
++ 3/20
++ 3/25
++ 6/40
+= 0.842630
+
+
+Which tasks, if any, do you anticipate missing their deadlines? Briefly justify.
+Hough. Because its utilization is the highest (6/40 = 20%).
+
+
+For task 8, the full code is executed only every 5th release. Why would we include the wcet of 6 rather than an average over those 5 releases?
+Because of the deadline. When you look at averaging you can not tell whether it has missed a deadline or not.

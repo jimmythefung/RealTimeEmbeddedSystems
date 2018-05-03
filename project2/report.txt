@@ -1,0 +1,532 @@
+Description of Files added / modified
+======================================
+Scheduler/hough_task.h    // contains hough transform task
+Scheduler/event_polling.h // contains ADC/Potentiometer setup + event polling task
+Scheduler/semaphore.h     // contains semaphore tasks
+hough/image10.h           // width and height is changed to 6x6 to make WCET 52ms. (Note the original dimension given was 5x5, I measured a WCET of 28ms.)
+
+fp_execution_timer()      // added in main.c - used to measure WCET of a given function
+spawn_all_tasks()         // modified to include required tasks for this project.
+ISR(TIMER0_COMPA_vect)    // modified in main.c - to release semaphore task state according to event_poll_flag
+
+
+
+
+
+Experiments
+============
+EXP 1:
+Configure the system so that all LEDs except the “semaphore” LED, toggle at a frequency of 2 Hz (I set the frequency such that you could better see what is going on. If you want to run it slower or faster, feel free.) Run the system for about 30 seconds to confirm everything is functional and meeting the time requirements. This means that everything but the yellow on-board LED should be blinking in sync, at least at the start of the experiment.
+
+	Result Log (of running for 30 seconds):
+		z
+		z(ero) e(xperiment) g(o) p(rint) r(period)
+		e 1
+		Ready to run experiment 1
+		z
+		Zeroing variables.
+		g
+		Go with experiment 1
+		p
+		Green count 30
+		Yellow count 30
+		Red count 30
+
+	Comment: 
+		- The LEDs blink in sync even after 30 seconds.
+
+		- At 2Hz (500ms), the toggle would occur twice a second. So over the course of 30 seconds it should result in 60 toggles. The log seems to suggest that the count variable for all LEDs are capped at 30, (However when I repeat the experiment for 5 seconds, I do get the expected toggle counts of 10 for all 3 LEDs). Oh! I found that it's because the experiment has an expired time of 15 seconds. That explains it! 
+
+
+
+EXP 2:
+Configure the system to the default frequencies (mostly 10 Hz). Place a 20ms busy-wait delay in the ISR for the GREEN LED Counting Task. Place it after the count. Run experiment and record results.
+
+	Result Log
+		A
+		z(ero) e(xperiment) g(o) p(rint) r(period)
+		z
+		Zeroing variables.
+		p
+		Green count 0
+		Yellow count 0
+		Red count 0
+		e 2
+		Ready to run experiment 2
+		g
+		Go with experiment 2
+		p
+		Green count 157
+		Yellow count 157
+		Red count 126
+
+
+
+EXP 3:
+Place a 20ms busy-wait delay in the ISR for the YELLOW LED Task (remove the delay from #2 above). Place it after the toggle. Run experiment and record results.
+
+	Result Log
+		A
+		z(ero) e(xperiment) g(o) p(rint) r(period)
+		z
+		Zeroing variables.
+		p
+		Green count 0
+		Yellow count 0
+		Red count 0
+		e 3
+		Ready to run experiment 3
+		g
+		Go with experiment 3
+		p
+		Green count 156
+		Yellow count 156
+		Red count 37
+
+
+EXP 4:
+Repeat #2, except use a 30ms busy-wait.
+
+	Result Log
+		A
+		z(ero) e(xperiment) g(o) p(rint) r(period)
+		z
+		Zeroing variables.
+		p
+		Green count 0
+		Yellow count 0
+		Red count 0
+		e 4
+		Ready to run experiment 4
+		g
+		Go with experiment 4
+		p
+		Green count 157
+		Yellow count 156
+		Red count 111
+
+EXP 5:
+Repeat #3, except use a 30ms busy-wait.
+
+	Result Log
+		A
+		z(ero) e(xperiment) g(o) p(rint) r(period)
+		z
+		Zeroing variables.
+		p
+		Green count 0
+		Yellow count 0
+		Red count 0
+		e 5
+		Ready to run experiment 5
+		g
+		Go with experiment 5
+		p
+		Green count 158
+		Yellow count 132
+		Red count 6
+
+
+EXP 6:
+Repeat #2, except use a 105ms busy-wait.
+
+	Result Log:
+		A
+		z(ero) e(xperiment) g(o) p(rint) r(period)
+		z
+		Zeroing variables.
+		p
+		Green count 0
+		Yellow count 0
+		Red count 0
+		e 6
+		Ready to run experiment 6
+		g
+		Go with experiment 6
+		p
+		Green count 151
+		Yellow count 2
+		Red count 1
+
+
+EXP 7:
+Repeat #3, except use a 105ms busy-wait.
+
+	Result Log:
+		A
+		z(ero) e(xperiment) g(o) p(rint) r(period)
+		z
+		Zeroing variables.
+		p
+		Green count 0
+		Yellow count 0
+		Red count 0
+		e 7
+		Ready to run experiment 7
+		g
+		Go with experiment 7
+		p
+		Green count 150
+		Yellow count 38
+		Red count 0
+
+
+EXP 8:
+Repeat #7 (i.e. 10Hz toggle with 105ms busy-wait in YELLOW LED Task), except place an sei() at the top of the ISR before the toggle and delay.
+
+	-The board crashed. The UI terminal screen exit, and the board resets itself.
+	-However, if I move the sei() out of the switch() and place it as the first line in the ISR, all the LEDs blink out of sync with no apparent pattern.
+
+
+Answer the Following Questions and Submit with Code
+====================================================
+1.
+Describe your method for WCET analysis. How confident are you in those results? Briefly explain. What factors influence the accuracy of a WCET analysis?
+
+Method
+	-The WCET is obtained by running a given function nTrials times, where nTrials is big enough to produce total runtime > 100ms (See "print_fp_execution()" in main.c)
+	-The time it took to run ntrials is recorded, call it "delta".
+	-Then the average is computed: avg = delta / nTrials.
+	-This avg is the result of our WCET analysis.
+
+
+Confidence
+	-A measurement of execution time is inherently of the form t_measured = t_truth +/- error.
+	
+	-The error term is due to:
+		1. The accuracies limitation in our measurement instructment, the timer function, with finite resolution of integer 1 ms.
+			-For example, the event_polling_task is really brief ~0.04ms. Our 1ms resolution can not resolve it. So we have to pick nTrials big enough so that the total runtime is many milliseconds that makes an error of 1ms acceptable.
+			-I define acceptable error to be 1% or less. This means a total runtime of at least 100ms (except for green_gpio_task, where the big nTrials overflow the program). So I picked nTrials big enough accordingly. Here's the choices:
+				-event_polling_task: total=125 ms, nTrials=3000,  avg = 0.042 ms
+				-semaphore_task:     total=256 ms, nTrials=50,    avg = 5.1 ms
+				-hough_task:         total=260 ms, nTrials=5,     avg = 52 ms
+				-green_gpio_task:    total=38 ms,  nTrials=30000, avg = 0.0012 ms
+				-yellow_gpio_task:   total=128 ms, nTrials=30000, avg = 0.0042 ms
+				-red_gpio_task:      total=113 ms, nTrials=30000, avg = 0.0037 ms
+
+		2. Physical noises/uncertainties in the electronic circuitry, as well as software environemnt (such as task switching overhead), can cause different runtime in each execution of a given function.
+
+	
+	-Mathematically, we can see that the WCET gets closer and closer to the truth value as number of trials increase:
+			[t_measured_1 + t_measured_1 + ... + t_measured_n] / n    =    [(t_truth +/- error)_1 + (t_truth +/- error)_2 + ... + (t_truth +/- error)_n] / n	
+		Therefore,
+			avg(t_measured) = t_truth + sum(error)/n
+		The sum(error)/n tends 0 because the positive error values tend to cancel the negative error values, then they're further divided by n.
+		So the bigger the nTrials, the more accurate to measuring the truth value.
+	
+	-We have to assume that the function whose WCET we try to measure is reasonably deterministic, so that the error follows a gaussian distribution. Otherwise the averaging method doesn't make sense.
+
+
+	
+
+
+
+2.
+Define the w(t) equation for each of the tasks.
+
+Notes:
+	1. that the WCET of each tasks are found by calling the following functions in main.c
+    // print_fp_execution(&event_polling_task, 3000, "Event Polling Task"); // 0.042ms
+    // print_fp_execution(&semaphore_task, 50, "Semaphore Task");     // 5.1ms
+    // print_fp_execution(&hough_task, 5, "Hough Task"); // 52ms (using 6x6 image10.h). If using 5x5, and it takes 28ms.
+    // print_fp_execution(&green_gpio_task, 30000, "Green LED Task");
+    // print_fp_execution(&yellow_gpio_task, 30000, "Yellow LED Task");
+    // print_fp_execution(&red_gpio_task, 30000, "Red LED Task");
+
+    2. A period of 100ms is chosen for all the schduler tasks. The period should especially be the same for the Event Polling and Semaphore tasks - since these two tasks make use of a shared semaphore variable/flag, they should both get to execute as frequently as each other.
+
+Summary:
+
+	i	Priority	Tasks			WCET(e_i)	Period
+	==================================================
+	6	1			Green 			.0012 ms 	100 ms
+	5	2			Yellow 			.0042 ms 	25  ms
+	4	3			Red 			.0037 ms 	100 ms
+	3	4			Event Polling 	.041  ms 	100 ms
+	2	5			Semaphore 		5     ms 	100 ms
+	1	6			HoughTF 		52    ms 	100 ms
+
+
+	Green (i=6)
+	===========
+	w(t)_green = e_6 + b_6 + sum( ceiling(t/P_k)*e_k )[from k=1 to 5]
+	where
+		e_6 = .0012
+		b_6 = 52
+		
+		e_5=.0042, p_5 = 25
+		e_4=.0037, p_4 = 100
+		e_3=.041,  p_3 = 100
+		e_2= 5,    p_2 = 100
+		e_1= 52,   p_1 = 100
+
+	Yellow (i=5)
+	===========
+	w(t)_yellow = e_5 + b_5 + sum( ceiling(t/P_k)*e_k )[from k=1 to 4]
+	where
+		e_5 = .0042
+		b_5 = 52
+		
+		e_4=.0037, p_4 = 100
+		e_3=.041,  p_3 = 100
+		e_2= 5,    p_2 = 100
+		e_1= 52,   p_1 = 100
+
+	Red (i=4)
+	===========
+	w(t)_red = e_4 + b_4 + sum( ceiling(t/P_k)*e_k )[from k=1 to 3]
+	where
+		e_4 = .0037
+		b_4 = 52
+		
+		e_3=.041,  p_3 = 100
+		e_2= 5,    p_2 = 100
+		e_1= 52,   p_1 = 100
+
+	Event Polling (i=3)
+	===================
+	w(t)_polling = e_3 + b_3 + sum( ceiling(t/P_k)*e_k )[from k=1 to 2]
+	where
+		e_3 = .041
+		b_3 = 52
+		
+		e_2= 5,    p_2 = 100
+		e_1= 52,   p_1 = 100
+
+	Semaphore (i=2)
+	===================
+	w(t)_semaphore = e_2 + b_2 + sum( ceiling(t/P_k)*e_k )[from k=1 to 1]
+	where
+		e_2 = 5
+		b_2 = 52
+
+		e_1= 52,   p_1 = 100
+
+	HoughTF (i=1)
+	===================
+	w(t)_hough = e_1 + b_1 + sum( ceiling(t/P_k)*e_k )[from k=1 to 0]
+	           = e_1
+	where
+		e_1 = 52
+		b_1 = 0
+
+
+3.
+In experiment #1:
+a. Did you observe any “drift” in the blinking of the LEDs, meaning they were in sync but then one seemed to blink slightly slower or faster than the other? Briefly explain how drift can occur.
+
+	-Yes there was a drift for the red LED. Once in a while. it blinks slowly behind the other two LEDs (green and yellow).
+	-The drift occurs because the red_gpio_task is executed from the scheduler, even though it is the highest priority task, it is possible that the red_gpio_task is blocked while the lower priority task is still executing. So the red led has to wait until its next turn when CPU is free.
+
+b. Were the LEDs synchronized at the start, meaning were they all on, then all off at the exact same time? Describe the factors that influence the ability to synchronize these events.
+	
+	-Yes the LEDs are synchonized at the start (the very first blink). And then they all off at the same time.
+	
+	-However, once in a while the red does not start at the same time and does not turn off at the same time as the Green and Yellow LED.
+	
+	-The ability for the LEDs to sync depends on the fact that within each millisecond time frame (in particular for this project2, when the current millisecond timeframe is multiples of 100), the CPU has enough instruction cycles to execute all 3 LEDs tasks. And for the red led task, no other tasks is blocking it.
+
+	-Even without blocking - say there's only the red_gpio_task in the scheduler, we know the 3 LEDs are not truly in sync at sufficiently small enough time scale, perhaps in the microseconds. Because our processor is not multi-threaded. It really can only process one task at a time, according to interrupt vector priority: Timer1 (Green) > Timer0 (ms_ticks) > Timer3 (Yellow) > Scheduler (Red).
+
+	
+
+
+4.
+Using the data collected in the above experiments, describe the behavior for each of the experiments #2 through #7, including number of job releases, missed deadlines, and expected number of releases. Explain the reason for the behavior for each of the experiments #2 through #7 (you can discuss each individually or describe them collectively).
+
+	We note that throughout the experiments, the periods of the timers are:
+		Timer1 (Green) : 100ms
+		Timer2 (mstimer/scheduler): 1ms
+		Timer3 (Yellow): 25ms
+
+	This means without any interference, over the course of 15 seconds, all green, yellow and red LEDs would have toggled 150 times.
+
+	Exp 2:
+	=======
+	Starting with experiment #2, which ran for about 15seconds. We have data:
+		Green count 157
+		Yellow count 157
+		Red count 126
+
+	-Behavior:
+	The 20ms delay introduced in Green ISR at every 100ms results in the mstimer (timer2 ISR) actually keeps false measure of elapsed milliseconds, at a rate of 20ms behind every real 120ms, or 20% error.
+	This means that the mstimer is actually 20% behind.
+	Consequently, the Red LED toggle counts is approximately 20% less than the other 2 LED toggle counts. In fact 157*(80%) = 126. Which agrees with our data.
+
+	-Deadline and releases:
+	Using the Green/yellow count as reference, 157 counts corrsponds to 15.7 seconds. In 15.7 seconds:
+		-Expected number of release is 157.
+		-Actual job releases are correct for Green and Yellow counts (157). But not for Red (126).
+		-So there are no missed deadlines for Green and Yellow, but 31 missed deadlines for Red.
+
+
+
+	Exp 3:
+	======
+	We have data:
+		Green count 156
+		Yellow count 156
+		Red count 37
+
+	-Behavior:
+	The 20ms delay introduced in Yellow ISR at every 25ms results in the mstimer (timer2 ISR) actually keeps false measure of elapsed milliseconds, at a rate of 80ms behind every real 100ms, or 80% error.
+	This means that the mstimer is actually 80% behind.
+	Consequently, the Red LED toggle counts is approximately 80% less than the other 2 LED toggle counts. In fact 156*(20%) = 32. Which agrees approxmiately with our data.
+
+	-Deadline and releases:
+	Using the Green/yellow count as reference, 156 counts corrsponds to 15.6 seconds. In 15.6 seconds:
+		-Expected number of release is 156.
+		-Actual job releases are correct for Green and Yellow counts (156). But not for Red (37).
+		-So there are no missed deadlines for Green and Yellow, but 119 missed deadlines (156-37) for Red.
+
+
+
+	Exp 4:
+	=======
+	We have data:
+		Green count 157
+		Yellow count 156
+		Red count 111
+
+	-The reasoning will be identical to that of Exp 2. The difference is the fact that the error is 30% instead of 20%.
+
+	-Behavior:
+	The 30ms delay introduced in Green ISR at every 100ms results in the mstimer (timer2 ISR) actually keeps false measure of elapsed milliseconds, at a rate of 30ms behind every real 120ms, or 30% error.
+	This means that the mstimer is actually 30% behind.
+	Consequently, the Red LED toggle counts is approximately 30% less than the other 2 LED toggle counts. In fact 157*(70%) = 110. Which agrees closely with our data.
+
+	-Deadline and releases:
+	Using the Green count as reference, 157 counts corrsponds to 15.7 seconds. In 15.7 seconds:
+		-Expected number of release is 157.
+		-Actual job releases are
+			157 for Green
+			156 for Yellow 
+			111 for Red
+		-Missed deadlines ( = Expected release - actual release) :
+			0 for Green
+			1 for Yellow
+			31 for Red
+
+
+	Exp 5:
+	=======
+	We have data:
+		Green count 158
+		Yellow count 132
+		Red count 6
+
+
+	-Behavior:
+	The 30ms delay introduced in Yellow ISR at every 25ms (i.e. 5ms more than the yellow ISR's own period) means that from the Yellow ISR perspective, it is 20ms behind for every four increments of "timer3_ticks" (supposedly corresponds to 100ms). This is an error of 20%.
+
+	Consequently the Yellow count is approximately 20% less than the Green count. In fact 158*(80%) = 126 agrees closely with the data (132).
+
+	Calculating how much behind is the mstimer ISR (timer0) is tricky. But it's obviously more than the 80% seen from Exp #3 (where the delay was 20ms). So we expect the ratio = (red count) / (green count) to be even less than 0.2.
+
+	-Deadline and releases:
+	Using the Green count as reference, 158 counts corrsponds to 15.8 seconds. In 15.8 seconds:
+		-Expected number of release is 157.
+		-Actual job releases are
+			158 for Green
+			132 for Yellow 
+			6 for Red
+		-Missed deadlines ( = Expected release - actual release) :
+			0 for Green
+			26 for Yellow
+			152 for Red
+
+
+	Exp 6:
+	=======
+	We have data:
+		Green count 151
+		Yellow count 2
+		Red count 1
+
+
+	-Behavior:
+	The 105ms delay introduced in Green ISR at every 100ms (i.e. 5ms more than the Green ISR's own period) means that from the Green ISR perspective, it is 5ms behind for occurance of interrupt (supposedly corresponds to 100ms). This is an error of 5%.
+
+	At this point it is difficult to tell what's the supposed expected number of releases. This is because at 5% error from 15 seconds is not a precision I can achieve by using my hand and pressing on button A. 
+
+	-Deadline and releases:
+	Using the Green count as reference, 151 counts corrsponds to 15.1 seconds. In 15.1 seconds:
+		-Expected number of release is 151.
+		-Actual job releases are
+			151 for Green
+			2 for Yellow 
+			1 for Red
+		-Missed deadlines ( = Expected release - actual release) :
+			0 for Green (meaningless/not reliable to state 0... due to the unknown expected release as explain above. We can still gain some sense of relative comparison if we assume 5% error to be neglibile.)
+			149 for Yellow
+			150 for Red
+
+
+	Exp 7:
+	=======
+	We have data:
+		Green count 150
+		Yellow count 38
+		Red count 0
+
+
+	-Behavior:
+	The 105ms delay introduced in Yellow ISR at every 25ms shouldn't affect the integrity of the green count of 150, correspoding to 15seconds.
+
+	Calculating how much behind is the mstimer ISR (timer0) as well as the Yellow timer is tricky. But it's obviously more than the previous experiments.
+
+	-Deadline and releases:
+	Using the Green count as reference, 150 counts corrsponds to 15 seconds. In 15 seconds:
+		-Expected number of release is 157.
+		-Actual job releases are
+			150 for Green
+			38 for Yellow 
+			0 for Red
+		-Missed deadlines ( = Expected release - actual release) :
+			0 for Green
+			112 for Yellow
+			150 for Red
+
+
+
+
+
+5.
+Using the data collected in experiment #8, describe and explain the behavior of the system.
+	
+	Observed behavior:
+	-No data was able to be collected because:
+		-The board crashed. The UI terminal screen exited, and the board resets itself.
+	
+	Behavior explanation:
+	-However, if I move the sei() out of the switch() block in the Yellow ISR and instead place sei() as the first line in the ISR, all the LEDs blink out of sync with no apparent pattern. This acutally makes sense, because sei() allows other timer interrupts to take over, especially by the green LED timer. When control is returned, the delay in experiment #8 only add further out-of-sync to the yellow LED.
+
+	-Hence in a short time all LEDs seem out of sync.
+
+6.
+Consider the various scheduling methods used here and discussed in class. For each method below, discuss the control over the timing of that task, responsiveness of the system, and the impact on other tasks with respect to timing.
+a. Time-driven execution inside an ISR (e.g. the scheduler).
+	- I assume this question refer to how the yellow_gpio_task() is executed inside ISR at every 4 ticks of "timer3_ticks".
+	- This gives a very good timing control of the task, because the interrupt has frame-by-frame time slice access, and it is very forceful in gaining CPU resource, especially in the interrupt type is of highest priorities (recall that timer1 > timer0 > timer3).
+	-Consequently this provides responsiveness of the given task. But may deteriorate the percieved responsiveness of the system if, for example, UI/interactive tasks with the users are constantly being interrupted by such time-driven execution tasks inside ISR.
+
+
+b. Time-driven release managed by the scheduler.
+	- This method is weaker than the one above in terms of timing control. Because:
+		1. The scheduler inside the ISR might still have to compete with other ISR of higher priority. The scheduler might have no knowledge of the execution time of such other tasks executed by other higher priority ISR, which results in uncertainty in the fesability of the scheduler's own tasks. So control over timing is not absolute.
+
+	- On the other hand, the percieved responsiveness of the system may be very consistent if the tasks are feasibly scheduled, and consequently good control over timing - assuming that sporadic interrupts by higher priority ISR don't really exist.
+
+
+c. External interrupt with execution inside an ISR (e.g. Communication Task, if inside ISR).
+	-This method provides strong control over task timing, similar to (a), and provide strong percieved system responsiveness. Because in this case the CPU resource is gained immediatly upon user's input.
+	-This is very good for urgent situation such as the "emergency stop button", or "force system power off".
+	-The external interrupt has some of the highest priority. Consequently, it is very disruptive of other tasks. And because external interrupt is random, a task that is hence executed can not be anticipated nor disruption mitigated by a running task scheduler even in a probabilistic sense.
+
+
+d. Periodic polling for an event that releases another task (e.g. Polling and Semaphore tasks).
+	-This method has the weakest timing control, because polling and semaphore tasks are executed at the mercy of layers of elements that have precedence over these tasks. Such elements of greater precedence include: semaphore flag, task priority ranking (according to the scheduler), higher priority interrupts.
+
+	-Consequently, the control of timing and system responsiveness is weak - unless they have been thoughtfully planned and analyzed before implementation. So that it is likely to run at sufficient frequency to provide consistent execution timing, and hence responsiveness.
+
+	-A strong advantage of this method, however, is the enforced ordering of events (or execution of tasks) as well as controlled access of critical resource.

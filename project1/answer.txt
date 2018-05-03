@@ -1,0 +1,147 @@
+User Interface
+===============
+Z/z: Zero the encoder marking the current position as 0 degrees.
+V/v: View the current values Kd, Kp, Vm, Pr, Pm, and T
+t: Execute trajectory while printing data to terminal
+
+P: Increase Kp by an amount of your choice*
+p: Decrease Kp by an amount of your choice
+D: Increase Kd by an amount of your choice
+d: Decrease Kd by an amount of your choice
+
+R/r: Not implemented to set reference position. Instead numeric keys are used. See "UI" in the next section.
+
+
+
+Code Deliverable
+================
+1.
+-PD controller.
+	-Done. see PD_Controller() - this is the task that is run by scheduler.
+
+-UI to specify relative reference position and trajectory.
+	-Done. User can input trajectories through the UI by pressing numeric keys.
+	-1 (+90 degree)
+	-2 (+180 degrees)
+	-3 (+360 degrees)
+	-4 (+720 degrees)
+	-5 (+5 degrees)	<- this is used to answer the question about the 5 degrees experiment.
+	-0 (-90 degree)
+	-9 (-180 degrees)
+	-8 (-360 degrees)
+	-7 (-720 degrees)
+	-These positions are stored in a doubly linked list data structure that act as a FIFO queue in a variable named "interpolatorQueue".
+	-When t is pressed. The queue release the stored reference position and update the global variable "Pr".
+	-Unfortunately I have not figured out a way to let user enter arbitrary degrees. 
+
+-Speend control using potentiomenter.
+	-Done. The potentiometer is read by update_kp_task() in the scheduler. It updates a global variable "kp_pot". This is an integer value bounded between (0 ~ 100); so a percentage.
+	-The UI also accepts adjustment of kp values. This value is stored in "kp_ui". This is an integer value bounded between (1 ~ 100).
+	-The torque equation in the PD controller uses "kp_total" = "kp_pot" + "kp_ui".
+
+
+
+Report Deliverable
+===================
+2. Experiment with your system to answer the following questions.
+-What is the precision of the encoder in degrees?
+	-The ratio equation is: (1 degree)/(360 degrees) = x / (2249 encoder counts). Solving for x we have, x =  6.2472 degrees precision.
+
+-What is the minimum drive signal required to move your motor from a stopped position? Specify this in terms of the TOP and Match values.
+	-In terms of percentage, 4% drive signal is required. This gives:
+	-TOP=4,000. (This is the TOP_4kHz)
+	-Match=160. (This is the OCR1B = ((TOP_4kHz + 1.0) * (duty / 100.0 )) - 1)
+
+-What is the approximate frequency of the encoder task (i.e. PCINT ISR) at 25% duty cycle and 75% duty cycle? (You can use ms_ticks to determine this.)
+	-At 25% duty cycle, I measured 100,000 occurances of PCINT ISR over the course of 56,830 milliseconds. This gives a frequency of 1759.63 Hz.
+	-At 75% duty cycle, I measured 100,000 occurances of PCINT ISR over the course of 18,065 milliseconds. This gives a frequency of 5535.56 Hz.
+
+
+
+3. For each task of the system, describe your method of "scheduling," and justify that method.
+	-There are 3 tasks: PD_Controller(), UI_task(), and update_kp_task().
+	-PD_controller_task():
+		-period = 20ms. priority=1.
+		-The period needs to be fast enough to give fine enough data resolution so that the motor doesn't oscillate without converging to the reference position.
+	-detect_arrival_task():
+		-period = 200ms. priority=2.
+		-The period is intended so it takes 10 measurements (of P and Torque values) over the course of 2 seconds to determine when motor has reached its destination. Then a 10ms delay is applied before executing the next trajectory in the interpolator.
+	-update_kp_task():
+		-period = 200ms. priority=3.
+		-This task reads the potentiomenter in terms of percentage. It is also rather unimportant so I gave it a low frequency and low priority that doesn't interfere with the two tasks above.
+	-UI_task():
+		-period = 300ms. priority=5.
+		-UI task is rather unimportant. The period is chosen so that it feels sufficiently responsive to the user.
+
+
+
+
+4. Implement the controller to maintain position and report your final gain values. Do not set the torque to 0 when you are "close" to the value or passed the value. Use the information from the first exercises to set the frequency of the controller. It might be useful to do the following to tune your gains.
+
+Use only P. Start with a very low gain so that the motor runs very slowly and takes its time getting to the set position.
+Increase the gain to get a fast response (i.e. get to your set point quickly). Then increase it a little more to oscillate.
+Add in D to dampen the response and eliminate oscillation.
+
+
+	-The final derivative gain is, kd=20.
+	-The final proportion gain is, kp=0.3=kp_total/100.
+		-In the toruqe equation, the proportion gained used is "kp_total"/100. Where "kp_total"=60. So the final proportion gain is effectively 0.3.
+		-The kp_total had to be scaled down by a factor of 100 in order to provide finer tuning. Otherwise without the scale down, even kp_total=1 would be too strong.
+
+
+
+
+5. Experiment with the speed and the range of reference positions. Pick a “low,” “high,” and “ideal” gain based on above experiments.
+
+Use each gain value to reach a reference position that is 2 full rotations from current position (+720 degrees).
+	-Low:
+		kp = kp_total/100 = 0.01 (where kp_total = 1);
+		kd = 1
+	-High:
+		kp = kp_total/100 = 1 (where kp_total = 100)
+		kd =
+	-ideal:
+		kp = kp_total/100 = 0.44 (where kp_total = 44)
+		kd = 7
+
+Use each gain value to reach a reference position that is 5 degrees from current position. Report on your observations, listing your “low,” “high,” and “ideal” gains.
+	-Low:
+		kp = kp_total/100 = 0.25 (where kp_total = 25)
+		kd = 1
+	-High:
+		kp = kp_total/100 = 0.48 (where kp_total = 48)
+		kd = 1
+	-ideal:
+		kp = kp_total/100 = 0.45 (where kp_total = 45)
+		kd = 5
+	
+	-Observation:
+		-For low kp, keeping kd=1, the motor stops long before arriving at the reference position. This is because with small kp, even a decent amount of error doesn't result in sufficient torque.
+
+		-For high kp, keeping kd=1, the motor overshoots and oscillates about the reference positiion.
+
+		-For ideal kp, keeping kd=1, the motor would overshoot just once and barely undershoot once. Then we increase the kd to fine tune the trajectory so that it barely overshoot but would re-approach the reference position without undershoot.
+
+
+
+
+6. Now run the same experiments, except slow your controller task frequency to 2 Hz (or 5 Hz if this is too disruptive). Report on your observations and explain why the system behaved the way that it did.
+	-Observation: the motor oscillate very strongly without decay about the reference position. This is because with the sparse collection of data, there is not enough updating the torque value to counter the overshoot. By the time the update happens, the deviation from the reference position is large and produce a high proportion gain, which results in a large undershoot. This cycle repeats itself.
+
+
+
+7. Graph Pm, Pr and T while trying to reach reference position of 180 degrees in the two scenarios above using a reasonable period for the controller and one that is too slow. It should be slow enough to cause visible oscillations, but not so slow that the motor looks like its going to oscillate itself apart. “While” means to record while executing but you don’t need to graph in real-time. You can do a screen dump of the data, then cut and paste into a file or send to a file. Use Excel or Open Office or whatever is your favorite/easiest graphing app to generate the plots.
+	-see:
+		-/answer7_plots/ideal180.png
+		-/answer7_plots/oscillate180.png
+
+
+
+8. Using your tuned gains (i.e. those that achieve good control while maintaining good speed) and the optimal frequency of the controller based on above experiment, implement the interpolator and execute the trajectory: rotate the motor forward 360*2 degrees, hold for 10 ms (have the system precisely measure this time period), rotate in reverse for 180 degrees, hold for 10 ms, rotate forwards for 5 degrees.
+
+Determining when you have reached your goal position is not always straight-forward, therefore it might be difficult to determine when to start the timer for a 10ms pause. You should not start the timer until you are confident the system has settled into its reference position (which it might not be able to achieve perfectly). Describe how you implemented this identifying what you evaluated to determine if the motor had settled into its reference position.
+
+	-This task is implemented in detect_arrival_task().
+	-Detection of arrival is defined to be when there are 10 continous occurances of "abs(torque) < 3" and "abs(P) < 5".
+	-Then a 10ms delayed is conducted - it is done in the function delay10ms() and relies on the timer.
+	-After 10ms, the next trajectory in the interpolator is executed.
